@@ -115,8 +115,8 @@ uint16_t get_tapping_term(uint16_t keycode, keyrecord_t *record) {
 /* ---------------------------------------------------------------------------
  * Underglow (17 LEDs, drawn directly instead of through an rgblight mode)
  *
- *   _BASE  plum ripples    every keypress sends a ring of light out from that key;
- *   _FN    teal ripples    rings fade as they grow and add up where they overlap
+ *   _BASE  teal ripples    every keypress sends a ring of light out from that key;
+ *   _FN    plum ripples    rings fade as they grow and add up where they overlap
  *   _FN2   static rainbow  hue follows each LED's left→right position
  *   _FN3   solid blue
  *
@@ -130,8 +130,8 @@ uint16_t get_tapping_term(uint16_t keycode, keyrecord_t *record) {
 #define FRAME_MS        16
 
 /* Background (dim) and ring crest (bright) colour per ripple layer */
-static const hsv_t ripple_bg[]    = {[_BASE] = {200, 255, 50}, [_FN] = {125, 255, 50}};
-static const hsv_t ripple_crest[] = {[_BASE] = {200, 220, 255}, [_FN] = {125, 200, 255}};
+static const hsv_t ripple_bg[]    = {[_BASE] = {125, 255, 50}, [_FN] = {200, 255, 50}};
+static const hsv_t ripple_crest[] = {[_BASE] = {125, 200, 255}, [_FN] = {200, 220, 255}};
 
 /* Centre of each matrix position, from LAYOUT_all in keyboard.json; {255, 255} = no key */
 static const uint8_t key_pos[MATRIX_ROWS][MATRIX_COLS][2] = {
