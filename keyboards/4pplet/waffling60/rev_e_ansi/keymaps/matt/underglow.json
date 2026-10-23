@@ -1,0 +1,52 @@
+{
+    "_comment": [
+        "Underglow presets. Edit, then `qmk compile` — gen_underglow.py turns this into underglow_presets.h.",
+        "Colours are [hue, saturation] on QMK's 0–255 scale; a colour can be a name from `colors` or a literal pair.",
+        "brightness is a percentage. Layers are 0 base, 1 Fn, 2 Fn2, 3 Fn3.",
+        "Effects: solid {color, brightness} · rainbow {brightness} · spin {colors: [a, b], brightness, period_ms}.",
+        "Any layer can add pulse {color, brightness}: each keypress sends a ring of that colour out from the key.",
+        "led_positions: where each of the 17 LEDs sits, in quarter-key units (x 0–60 left→right, y 0–20 top→bottom).",
+        "Fn+Z re-runs calibration and types out a new led_positions line to paste here."
+    ],
+
+    "active": "teal purple spin",
+
+    "led_positions": [
+        [19, 14], [13, 18], [13, 18], [13, 18], [13, 18], [13, 18], [13, 18], [47, 18], [47, 18],
+        [47, 18], [47, 18], [47, 18], [47, 18], [47, 18], [47, 18], [4, 10], [4, 10]
+    ],
+
+    "colors": {
+        "teal": [125, 255],
+        "teal_light": [125, 200],
+        "purple": [200, 255],
+        "purple_light": [200, 220],
+        "blue": [170, 255]
+    },
+
+    "pulse_timing": {
+        "speed": 80,
+        "width": 10,
+        "life_ms": 1000
+    },
+
+    "presets": {
+        "teal purple pulse": {
+            "layers": [
+                {"effect": "solid", "color": "teal", "brightness": 20, "pulse": {"color": "teal_light", "brightness": 100}},
+                {"effect": "solid", "color": "purple", "brightness": 20, "pulse": {"color": "purple_light", "brightness": 100}},
+                {"effect": "rainbow", "brightness": 100},
+                {"effect": "solid", "color": "blue", "brightness": 100}
+            ]
+        },
+
+        "teal purple spin": {
+            "layers": [
+                {"effect": "spin", "colors": ["teal", "purple"], "brightness": 100, "period_ms": 8000},
+                {"effect": "solid", "color": "teal", "brightness": 50, "pulse": {"color": "teal_light", "brightness": 100}},
+                {"effect": "solid", "color": "purple", "brightness": 50, "pulse": {"color": "purple_light", "brightness": 100}},
+                {"effect": "solid", "color": "teal", "brightness": 50, "pulse": {"color": "teal_light", "brightness": 100}}
+            ]
+        }
+    }
+}

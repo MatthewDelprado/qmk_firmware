@@ -115,23 +115,39 @@ uint16_t get_tapping_term(uint16_t keycode, keyrecord_t *record) {
 /* ---------------------------------------------------------------------------
  * Underglow (17 LEDs, drawn directly instead of through an rgblight mode)
  *
- *   _BASE  teal ripples    every keypress sends a ring of light out from that key;
- *   _FN    plum ripples    rings fade as they grow and add up where they overlap
- *   _FN2   static rainbow  hue follows each LED's left→right position
- *   _FN3   solid blue
+ * Presets live in underglow.json; rules.mk regenerates underglow_presets.h from
+ * it on every build. Each layer gets a base effect, optionally with pulses:
+ *   solid    one colour
+ *   rainbow  static, hue follows each LED's left→right position
+ *   spin     conic gradient between two colours, slowly rotating
+ *   pulse    every keypress sends a ring out from that key; rings fade as they
+ *            grow and add up where they overlap
  *
  * Positions are in quarter-key units: x 0–60 left→right, y 0–20 top→bottom.
  * ------------------------------------------------------------------------- */
 
-#define RIPPLE_MAX      10   /* rings alive at once; a new press replaces the oldest */
-#define RIPPLE_SPEED    80   /* ring growth, quarter-keys per second (20 keys/s) */
-#define RIPPLE_WIDTH    10   /* ring thickness, quarter-keys */
-#define RIPPLE_LIFE_MS  1000 /* ring fully faded after this */
-#define FRAME_MS        16
+enum { FX_SOLID, FX_RAINBOW, FX_SPIN };
 
-/* Background (dim) and ring crest (bright) colour per ripple layer */
-static const hsv_t ripple_bg[]    = {[_BASE] = {125, 255, 50}, [_FN] = {200, 255, 50}};
-static const hsv_t ripple_crest[] = {[_BASE] = {125, 200, 255}, [_FN] = {200, 220, 255}};
+typedef struct {
+    uint8_t  effect;
+    hsv_t    a, b;      /* solid uses a; spin blends a → b */
+    uint16_t period_ms; /* spin: one full turn */
+    bool     pulse;
+    hsv_t    crest;     /* pulse ring colour */
+} layer_fx_t;
+
+typedef struct {
+    layer_fx_t layers[4];
+} underglow_preset_t;
+
+#include "underglow_presets.h"
+
+#define RIPPLE_MAX 10 /* rings alive at once; a new press replaces the oldest */
+#define FRAME_MS   16
+#define SPIN_CX    30 /* spin rotates around the middle of the board */
+#define SPIN_CY    10
+
+static const underglow_preset_t *preset = &underglow_presets[UNDERGLOW_ACTIVE_PRESET];
 
 /* Centre of each matrix position, from LAYOUT_all in keyboard.json; {255, 255} = no key */
 static const uint8_t key_pos[MATRIX_ROWS][MATRIX_COLS][2] = {
@@ -142,13 +158,10 @@ static const uint8_t key_pos[MATRIX_ROWS][MATRIX_COLS][2] = {
     {{3, 18}, {8, 18}, {13, 18}, {255, 255}, {22, 18}, {255, 255}, {30, 18}, {255, 255}, {38, 18}, {255, 255}, {255, 255}, {47, 18}, {52, 18}, {57, 18}},
 };
 
-/* Where each underglow LED sits. PLACEHOLDER — evenly spaced along the middle until
- * the real positions are known. Replace with the table LED_CAL types out.
+/* Copied from led_positions in underglow.json at boot; LED_CAL rewrites it live.
  * {255, 255} = LED not visible; it is kept dark. */
-static uint8_t led_pos[RGBLIGHT_LED_COUNT][2] = {
-    {2, 10}, {5, 10}, {9, 10}, {12, 10}, {16, 10}, {19, 10}, {23, 10}, {26, 10}, {30, 10},
-    {33, 10}, {37, 10}, {40, 10}, {44, 10}, {47, 10}, {51, 10}, {54, 10}, {58, 10},
-};
+static uint8_t led_pos[RGBLIGHT_LED_COUNT][2];
+static uint8_t led_angle[RGBLIGHT_LED_COUNT]; /* around the spin centre, 0–255 = one turn */
 
 typedef struct {
     bool     active;
@@ -158,13 +171,26 @@ typedef struct {
 
 static ripple_t ripples[RIPPLE_MAX];
 static uint8_t  ripple_next;
-static bool     ripples_running; /* frames still need drawing */
+static bool     animating;       /* pulses or spin still need frames */
 static int8_t   cal_led = -1;    /* LED being calibrated, -1 = not calibrating */
 
 static uint8_t isqrt(uint16_t n) {
     uint8_t r = 0;
     while ((uint16_t)(r + 1) * (r + 1) <= n) r++;
     return r;
+}
+
+/* Cheap atan2: "diamond angle", monotonic in the true angle, 0–255 = one turn */
+static uint8_t diamond_angle(int16_t dx, int16_t dy) {
+    if (dx == 0 && dy == 0) return 0;
+    int16_t r = (int32_t)dy * 64 / (abs(dx) + abs(dy)); /* -64..64 */
+    return dx >= 0 ? (uint8_t)r : (uint8_t)(128 - r);
+}
+
+static void led_positions_changed(void) {
+    for (uint8_t i = 0; i < RGBLIGHT_LED_COUNT; i++) {
+        led_angle[i] = diamond_angle(led_pos[i][0] - SPIN_CX, led_pos[i][1] - SPIN_CY);
+    }
 }
 
 static void ripple_start(uint8_t row, uint8_t col) {
@@ -179,57 +205,72 @@ static void ripple_start(uint8_t row, uint8_t col) {
     }
     r->start        = timer_read();
     r->active       = true;
-    ripples_running = true;
+    animating = true;
 }
 
-/* Draws one frame for a ripple layer. Returns false once every ring has faded
- * (that last frame is plain background, so drawing can stop). */
-static bool ripple_draw(uint8_t layer) {
-    uint16_t level[RGBLIGHT_LED_COUNT] = {0};
-    bool     any                       = false;
-
+/* Adds up every live ring's brightness at each LED. Returns false once all have faded. */
+static bool ripple_levels(uint16_t level[RGBLIGHT_LED_COUNT]) {
+    bool any = false;
     for (uint8_t n = 0; n < RIPPLE_MAX; n++) {
         ripple_t *r = &ripples[n];
         if (!r->active) continue;
         uint16_t age = timer_elapsed(r->start);
-        if (age >= RIPPLE_LIFE_MS) {
+        if (age >= PULSE_LIFE_MS) {
             r->active = false;
             continue;
         }
         any             = true;
-        uint16_t radius = (uint32_t)age * RIPPLE_SPEED / 1000;
-        uint16_t fade   = 255 - (uint32_t)age * 255 / RIPPLE_LIFE_MS;
+        uint16_t radius = (uint32_t)age * PULSE_SPEED / 1000;
+        uint16_t fade   = 255 - (uint32_t)age * 255 / PULSE_LIFE_MS;
         fade            = fade * fade / 255; /* ease out */
         for (uint8_t i = 0; i < RGBLIGHT_LED_COUNT; i++) {
             uint16_t off = abs((int16_t)r->dist[i] - (int16_t)radius);
-            if (off < RIPPLE_WIDTH) level[i] += (RIPPLE_WIDTH - off) * fade / RIPPLE_WIDTH;
+            if (off < PULSE_WIDTH) level[i] += (PULSE_WIDTH - off) * fade / PULSE_WIDTH;
         }
     }
-
-    rgb_t bg    = hsv_to_rgb(ripple_bg[layer]);
-    rgb_t crest = hsv_to_rgb(ripple_crest[layer]);
-    for (uint8_t i = 0; i < RGBLIGHT_LED_COUNT; i++) {
-        if (led_pos[i][0] == 255) {
-            rgblight_driver.set_color(i, 0, 0, 0);
-            continue;
-        }
-        uint16_t l = MIN(level[i], 255); /* overlapping rings add up, capped at full crest */
-        rgblight_driver.set_color(i, bg.r + (crest.r - bg.r) * l / 255, bg.g + (crest.g - bg.g) * l / 255, bg.b + (crest.b - bg.b) * l / 255);
-    }
-    rgblight_driver.flush();
     return any;
 }
 
-static void rainbow_draw(void) {
+static uint8_t lerp8(uint8_t a, uint8_t b, uint8_t t) {
+    return a + ((int16_t)b - a) * t / 255;
+}
+
+static hsv_t base_color(const layer_fx_t *fx, uint8_t i, uint8_t spin_phase) {
+    switch (fx->effect) {
+        case FX_RAINBOW:
+            return (hsv_t){led_pos[i][0] * 230 / 60, 255, fx->a.v}; /* red → magenta, not wrapping to red */
+        case FX_SPIN: {
+            /* t = 255 facing the gradient's colour-a side, 0 on the opposite side */
+            uint8_t  d    = led_angle[i] - spin_phase;
+            uint16_t away = d < 128 ? d : 256 - d; /* 0 facing colour a … 128 opposite */
+            uint8_t  t    = 255 - MIN(away * 2, 255);
+            return (hsv_t){lerp8(fx->b.h, fx->a.h, t), lerp8(fx->b.s, fx->a.s, t), fx->a.v};
+        }
+        default:
+            return fx->a;
+    }
+}
+
+/* Draws one frame of the current layer. Returns true while it still needs frames. */
+static bool underglow_draw(uint8_t layer) {
+    const layer_fx_t *fx = &preset->layers[MIN(layer, 3)];
+
+    uint16_t level[RGBLIGHT_LED_COUNT] = {0};
+    bool     pulsing                   = fx->pulse && ripple_levels(level);
+    rgb_t    crest                     = hsv_to_rgb(fx->crest);
+    uint8_t  spin_phase                = fx->effect == FX_SPIN ? timer_read32() % fx->period_ms * 256 / fx->period_ms : 0;
+
     for (uint8_t i = 0; i < RGBLIGHT_LED_COUNT; i++) {
         if (led_pos[i][0] == 255) {
             rgblight_driver.set_color(i, 0, 0, 0);
             continue;
         }
-        rgb_t c = hsv_to_rgb((hsv_t){led_pos[i][0] * 230 / 60, 255, 255}); /* red → magenta, not wrapping to red */
-        rgblight_driver.set_color(i, c.r, c.g, c.b);
+        rgb_t   c = hsv_to_rgb(base_color(fx, i, spin_phase));
+        uint8_t l = MIN(level[i], 255); /* overlapping rings add up, capped at full crest */
+        rgblight_driver.set_color(i, lerp8(c.r, crest.r, l), lerp8(c.g, crest.g, l), lerp8(c.b, crest.b, l));
     }
     rgblight_driver.flush();
+    return pulsing || fx->effect == FX_SPIN;
 }
 
 static void cal_draw(void) {
@@ -242,26 +283,14 @@ static void cal_draw(void) {
 
 static void underglow_refresh(layer_state_t state) {
     if (cal_led >= 0 || !rgblight_is_enabled()) return;
-    uint8_t layer = get_highest_layer(state);
     /* Keep rgblight itself in a still mode so it never animates over our drawing */
     rgblight_mode_noeeprom(RGBLIGHT_MODE_STATIC_LIGHT);
-    switch (layer) {
-        case _BASE:
-        case _FN:
-            ripples_running = ripple_draw(layer);
-            break;
-        case _FN2:
-            rainbow_draw();
-            break;
-        default:
-            rgblight_sethsv_noeeprom(170, 255, 255); /* blue */
-            break;
-    }
+    animating = underglow_draw(get_highest_layer(state));
 }
 
-/* Types the calibrated table so it can be pasted over led_pos above */
+/* Types the calibrated positions so they can be pasted over led_positions in underglow.json */
 static void send_u8(uint8_t v) {
-    char buf[4];
+    char  buf[4];
     char *p = buf + sizeof(buf) - 1;
     *p      = '\0';
     do {
@@ -273,21 +302,22 @@ static void send_u8(uint8_t v) {
 
 static void cal_finish(void) {
     cal_led = -1;
-    send_string("led_pos = {");
+    send_string("\"led_positions\": [");
     for (uint8_t i = 0; i < RGBLIGHT_LED_COUNT; i++) {
-        send_string("{");
+        send_string("[");
         send_u8(led_pos[i][0]);
         send_string(", ");
         send_u8(led_pos[i][1]);
-        send_string(i < RGBLIGHT_LED_COUNT - 1 ? "}, " : "}};\n");
+        send_string(i < RGBLIGHT_LED_COUNT - 1 ? "], " : "]],\n");
     }
+    led_positions_changed();
     underglow_refresh(layer_state);
 }
 
 /* LED_CAL: lights one LED at a time. Press the key closest to the lit LED to record
  * its position, or the Fn key if you can't see it. After the last LED the finished
- * table is typed out (have a text editor focused). New positions apply straight away
- * but are lost on unplug until pasted into led_pos. */
+ * list is typed out (have a text editor focused). New positions apply straight away
+ * but are lost on unplug until pasted into underglow.json. */
 static void cal_key(uint8_t row, uint8_t col) {
     if (row == 3 && col == 13) { /* Fn key = LED not visible */
         led_pos[cal_led][0] = led_pos[cal_led][1] = 255;
@@ -315,7 +345,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     return cal_led < 0 || keycode == MO(1);
 }
 
-/* Reads raw matrix presses instead of process_record so ripples start the instant a
+/* Reads raw matrix presses instead of process_record so pulses start the instant a
  * key goes down, even on mod-taps that wait for the tapping term. */
 void housekeeping_task_user(void) {
     static matrix_row_t prev[MATRIX_ROWS];
@@ -330,19 +360,21 @@ void housekeeping_task_user(void) {
             if (!(pressed & 1)) continue;
             if (cal_led >= 0) {
                 cal_key(row, col);
-            } else if (layer == _BASE || layer == _FN) {
+            } else if (preset->layers[MIN(layer, 3)].pulse) {
                 ripple_start(row, col);
             }
         }
     }
 
-    if (cal_led < 0 && ripples_running && (layer == _BASE || layer == _FN) && rgblight_is_enabled() && timer_elapsed(last_frame) >= FRAME_MS) {
+    if (cal_led < 0 && animating && rgblight_is_enabled() && timer_elapsed(last_frame) >= FRAME_MS) {
         last_frame      = timer_read();
-        ripples_running = ripple_draw(layer);
+        animating = underglow_draw(layer);
     }
 }
 
 void keyboard_post_init_user(void) {
+    memcpy(led_pos, led_pos_default, sizeof(led_pos));
+    led_positions_changed();
     underglow_refresh(layer_state); /* also stops the boot-time red flash */
 }
 
