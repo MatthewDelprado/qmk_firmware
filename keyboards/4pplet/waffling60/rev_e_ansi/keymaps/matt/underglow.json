@@ -43,7 +43,7 @@
 
         "teal purple spin": {
             "layers": [
-                {"effect": "spin", "colors": ["teal", "purple"], "brightness": 100, "period_ms": 8000},
+                {"effect": "spin", "colors": ["teal", "purple"], "brightness": 100, "period_ms": 4000},
                 {"effect": "solid", "color": "teal", "brightness": 50, "pulse": {"color": "teal_light", "brightness": 100}},
                 {"effect": "solid", "color": "purple", "brightness": 50, "pulse": {"color": "purple_light", "brightness": 100}},
                 {"effect": "solid", "color": "teal", "brightness": 50, "pulse": {"color": "teal_light", "brightness": 100}}
