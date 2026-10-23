@@ -5,7 +5,7 @@
 #define PULSE_WIDTH   10
 #define PULSE_LIFE_MS 1000
 
-#define UNDERGLOW_ACTIVE_PRESET 1 /* teal purple spin */
+#define UNDERGLOW_ACTIVE_PRESET 2 /* teal purple spin dim */
 
 static const uint8_t led_pos_default[RGBLIGHT_LED_COUNT][2] = {
     {3, 6}, {2, 2}, {14, 2}, {22, 2}, {30, 2}, {38, 2}, {46, 2}, {58, 2}, {56, 10}, {56, 14}, {52, 18}, {38, 18}, {30, 18}, {22, 18}, {13, 18}, {4, 14}, {255, 255},
@@ -26,5 +26,12 @@ static const underglow_preset_t underglow_presets[] = {
         {FX_SOLID, {125, 255, 128}, {125, 255, 128}, 0, true, {125, 200, 255}},
         {FX_SOLID, {200, 255, 128}, {200, 255, 128}, 0, true, {200, 220, 255}},
         {FX_SOLID, {125, 255, 128}, {125, 255, 128}, 0, true, {125, 200, 255}},
+    }},
+    /* teal purple spin dim */
+    {{
+        {FX_SPIN, {125, 255, 255}, {200, 255, 255}, 4000, false, {0, 0, 0}},
+        {FX_SOLID, {125, 255, 255}, {125, 255, 255}, 0, true, {125, 255, 26}},
+        {FX_SOLID, {200, 255, 255}, {200, 255, 255}, 0, true, {200, 255, 26}},
+        {FX_SOLID, {125, 255, 255}, {125, 255, 255}, 0, true, {125, 255, 26}},
     }},
 };

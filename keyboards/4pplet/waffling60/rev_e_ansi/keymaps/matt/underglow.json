@@ -4,13 +4,13 @@
         "Colours are [hue, saturation] on QMK's 0–255 scale; a colour can be a name from `colors` or a literal pair.",
         "brightness is a percentage. Layers are 0 base, 1 Fn, 2 Fn2, 3 Fn3.",
         "Effects: solid {color, brightness} · rainbow {brightness} · spin {colors: [a, b], brightness, period_ms}.",
-        "Any layer can add pulse {color, brightness}: each keypress sends a ring of that colour out from the key.",
+        "Any layer can add pulse {color, brightness}: each keypress sends a ring of that colour out from the key. A pulse dimmer than the layer makes a dark ring.",
         "led_positions: where each of the 17 LEDs sits, in quarter-key units (x 0–60 left→right, y 0–20 top→bottom); [255, 255] = kept dark.",
         "They run clockwise around the edge from Caps. LED 9 (lower right edge) is estimated; LED 16 is the Caps Lock LED, not fitted on hotswap.",
         "Fn+Z re-runs calibration and types out a new led_positions line to paste here."
     ],
 
-    "active": "teal purple spin",
+    "active": "teal purple spin dim",
 
     "led_positions": [
         [3, 6], [2, 2], [14, 2], [22, 2], [30, 2], [38, 2], [46, 2], [58, 2], [56, 10],
@@ -47,6 +47,15 @@
                 {"effect": "solid", "color": "teal", "brightness": 50, "pulse": {"color": "teal_light", "brightness": 100}},
                 {"effect": "solid", "color": "purple", "brightness": 50, "pulse": {"color": "purple_light", "brightness": 100}},
                 {"effect": "solid", "color": "teal", "brightness": 50, "pulse": {"color": "teal_light", "brightness": 100}}
+            ]
+        },
+
+        "teal purple spin dim": {
+            "layers": [
+                {"effect": "spin", "colors": ["teal", "purple"], "brightness": 100, "period_ms": 4000},
+                {"effect": "solid", "color": "teal", "brightness": 100, "pulse": {"color": "teal", "brightness": 10}},
+                {"effect": "solid", "color": "purple", "brightness": 100, "pulse": {"color": "purple", "brightness": 10}},
+                {"effect": "solid", "color": "teal", "brightness": 100, "pulse": {"color": "teal", "brightness": 10}}
             ]
         }
     }
