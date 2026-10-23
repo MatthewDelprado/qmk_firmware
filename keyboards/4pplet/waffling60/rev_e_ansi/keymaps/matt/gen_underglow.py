@@ -73,6 +73,12 @@ def generate(cfg):
     if not (isinstance(leds, list) and len(leds) == LED_COUNT):
         raise ConfigError(f"led_positions must list {LED_COUNT} [x, y] pairs")
     timing = cfg["pulse_timing"]
+    trans = cfg.get("layer_transition", {})
+    trans_speed, trans_width = trans.get("speed", 0), trans.get("width", 8)
+    if not (isinstance(trans_speed, int) and 0 <= trans_speed <= 2000):
+        raise ConfigError("layer_transition.speed must be 0-2000 (0 = instant)")
+    if not (isinstance(trans_width, int) and 1 <= trans_width <= 60):
+        raise ConfigError("layer_transition.width must be 1-60")
     presets = cfg["presets"]
     names = list(presets)
     if cfg.get("active") not in presets:
@@ -85,6 +91,9 @@ def generate(cfg):
         f"#define PULSE_SPEED   {timing['speed']}",
         f"#define PULSE_WIDTH   {timing['width']}",
         f"#define PULSE_LIFE_MS {timing['life_ms']}",
+        "",
+        f"#define TRANSITION_SPEED {trans_speed}",
+        f"#define TRANSITION_WIDTH {trans_width}",
         "",
         f"#define UNDERGLOW_ACTIVE_PRESET {names.index(cfg['active'])} /* {cfg['active']} */",
         "",

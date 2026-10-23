@@ -7,6 +7,8 @@
         "Any layer can add pulse {color, brightness}: each keypress sends a ring of that colour out from the key. A pulse dimmer than the layer makes a dark ring.",
         "led_positions: where each of the 17 LEDs sits, in quarter-key units (x 0–60 left→right, y 0–20 top→bottom); [255, 255] = kept dark.",
         "They run clockwise around the edge from Caps. LED 9 (lower right edge) is estimated; LED 16 is the Caps Lock LED, not fitted on hotswap.",
+        "pulse_timing and layer_transition speeds are quarter-keys per second; widths are quarter-keys.",
+        "layer_transition: changing layer ripples the new colours out from the key that changed it. speed 0 = instant.",
         "Fn+Z re-runs calibration and types out a new led_positions line to paste here."
     ],
 
@@ -29,6 +31,11 @@
         "speed": 80,
         "width": 10,
         "life_ms": 1000
+    },
+
+    "layer_transition": {
+        "speed": 240,
+        "width": 8
     },
 
     "presets": {

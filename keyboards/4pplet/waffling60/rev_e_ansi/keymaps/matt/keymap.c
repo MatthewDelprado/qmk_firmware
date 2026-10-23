@@ -122,6 +122,7 @@ uint16_t get_tapping_term(uint16_t keycode, keyrecord_t *record) {
  *   spin     conic gradient between two colours, slowly rotating
  *   pulse    every keypress sends a ring out from that key; rings fade as they
  *            grow and add up where they overlap
+ * Changing layer ripples the new layer's colours out from the key that changed it.
  *
  * Positions are in quarter-key units: x 0–60 left→right, y 0–20 top→bottom.
  * ------------------------------------------------------------------------- */
@@ -173,6 +174,16 @@ static ripple_t ripples[RIPPLE_MAX];
 static uint8_t  ripple_next;
 static bool     animating;       /* pulses or spin still need frames */
 static int8_t   cal_led = -1;    /* LED being calibrated, -1 = not calibrating */
+
+static matrix_row_t matrix_prev[MATRIX_ROWS]; /* matrix as of the last housekeeping pass */
+static uint8_t      last_key[2] = {SPIN_CX, SPIN_CY};
+
+/* Layer transition: the new layer spreads out from a key, over a snapshot of the old one */
+static rgb_t    shown[RGBLIGHT_LED_COUNT]; /* what each LED shows right now */
+static rgb_t    from[RGBLIGHT_LED_COUNT];  /* snapshot when the transition started */
+static uint8_t  trans_dist[RGBLIGHT_LED_COUNT];
+static uint16_t trans_start;
+static bool     transitioning;
 
 static uint8_t isqrt(uint16_t n) {
     uint8_t r = 0;
@@ -252,6 +263,22 @@ static hsv_t base_color(const layer_fx_t *fx, uint8_t i, uint8_t spin_phase) {
 }
 
 /* Draws one frame of the current layer. Returns true while it still needs frames. */
+static rgb_t blend(rgb_t a, rgb_t b, uint8_t t) {
+    return (rgb_t){lerp8(a.r, b.r, t), lerp8(a.g, b.g, t), lerp8(a.b, b.b, t)};
+}
+
+static void transition_start(uint8_t x, uint8_t y) {
+    if (!TRANSITION_SPEED) return; /* 0 = switch instantly */
+    memcpy(from, shown, sizeof(from));
+    for (uint8_t i = 0; i < RGBLIGHT_LED_COUNT; i++) {
+        int16_t dx    = led_pos[i][0] - x;
+        int16_t dy    = led_pos[i][1] - y;
+        trans_dist[i] = led_pos[i][0] == 255 ? 0 : isqrt(dx * dx + dy * dy);
+    }
+    trans_start   = timer_read();
+    transitioning = true;
+}
+
 static bool underglow_draw(uint8_t layer) {
     const layer_fx_t *fx = &preset->layers[MIN(layer, 3)];
 
@@ -259,18 +286,45 @@ static bool underglow_draw(uint8_t layer) {
     bool     pulsing                   = fx->pulse && ripple_levels(level);
     rgb_t    crest                     = hsv_to_rgb(fx->crest);
     uint8_t  spin_phase                = fx->effect == FX_SPIN ? timer_read32() % fx->period_ms * 256 / fx->period_ms : 0;
+    uint16_t front                     = transitioning ? (uint32_t)timer_elapsed(trans_start) * TRANSITION_SPEED / 1000 : 0;
+    bool     still_moving              = false;
 
     for (uint8_t i = 0; i < RGBLIGHT_LED_COUNT; i++) {
-        if (led_pos[i][0] == 255) {
-            rgblight_driver.set_color(i, 0, 0, 0);
-            continue;
+        rgb_t c = {0, 0, 0};
+        if (led_pos[i][0] != 255) {
+            uint8_t l = MIN(level[i], 255); /* overlapping rings add up, capped at full crest */
+            c         = blend(hsv_to_rgb(base_color(fx, i, spin_phase)), crest, l);
         }
-        rgb_t   c = hsv_to_rgb(base_color(fx, i, spin_phase));
-        uint8_t l = MIN(level[i], 255); /* overlapping rings add up, capped at full crest */
-        rgblight_driver.set_color(i, lerp8(c.r, crest.r, l), lerp8(c.g, crest.g, l), lerp8(c.b, crest.b, l));
+        if (transitioning) {
+            /* Behind the front: new layer. Ahead of it: the old snapshot. A soft edge between. */
+            uint16_t into = front > trans_dist[i] ? front - trans_dist[i] : 0;
+            if (into < TRANSITION_WIDTH) {
+                c            = blend(from[i], c, into * 255 / TRANSITION_WIDTH);
+                still_moving = true;
+            }
+        }
+        shown[i] = c;
+        rgblight_driver.set_color(i, c.r, c.g, c.b);
     }
     rgblight_driver.flush();
-    return pulsing || fx->effect == FX_SPIN;
+    transitioning = still_moving;
+    return pulsing || transitioning || fx->effect == FX_SPIN;
+}
+
+/* The key whose state just changed (the one that switched layer), else the last key pressed */
+static void transition_origin(uint8_t *x, uint8_t *y) {
+    for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
+        matrix_row_t changed = matrix_get_row(row) ^ matrix_prev[row];
+        for (uint8_t col = 0; changed && col < MATRIX_COLS; col++, changed >>= 1) {
+            if ((changed & 1) && key_pos[row][col][0] != 255) {
+                *x = key_pos[row][col][0];
+                *y = key_pos[row][col][1];
+                return;
+            }
+        }
+    }
+    *x = last_key[0];
+    *y = last_key[1];
 }
 
 static void cal_draw(void) {
@@ -282,7 +336,15 @@ static void cal_draw(void) {
 }
 
 static void underglow_refresh(layer_state_t state) {
+    static uint8_t current_layer;
     if (cal_led >= 0 || !rgblight_is_enabled()) return;
+    uint8_t layer = get_highest_layer(state);
+    if (layer != current_layer) {
+        uint8_t x, y;
+        transition_origin(&x, &y);
+        transition_start(x, y);
+        current_layer = layer;
+    }
     /* Keep rgblight itself in a still mode so it never animates over our drawing */
     rgblight_mode_noeeprom(RGBLIGHT_MODE_STATIC_LIGHT);
     animating = underglow_draw(get_highest_layer(state));
@@ -348,16 +410,19 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 /* Reads raw matrix presses instead of process_record so pulses start the instant a
  * key goes down, even on mod-taps that wait for the tapping term. */
 void housekeeping_task_user(void) {
-    static matrix_row_t prev[MATRIX_ROWS];
     static uint16_t     last_frame;
     uint8_t             layer = get_highest_layer(layer_state);
 
     for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
         matrix_row_t now     = matrix_get_row(row);
-        matrix_row_t pressed = now & ~prev[row];
-        prev[row]            = now;
+        matrix_row_t pressed = now & ~matrix_prev[row];
+        matrix_prev[row]     = now;
         for (uint8_t col = 0; pressed && col < MATRIX_COLS; col++, pressed >>= 1) {
             if (!(pressed & 1)) continue;
+            if (key_pos[row][col][0] != 255) {
+                last_key[0] = key_pos[row][col][0];
+                last_key[1] = key_pos[row][col][1];
+            }
             if (cal_led >= 0) {
                 cal_key(row, col);
             } else if (preset->layers[MIN(layer, 3)].pulse) {

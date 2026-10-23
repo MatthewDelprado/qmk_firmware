@@ -5,6 +5,9 @@
 #define PULSE_WIDTH   10
 #define PULSE_LIFE_MS 1000
 
+#define TRANSITION_SPEED 240
+#define TRANSITION_WIDTH 8
+
 #define UNDERGLOW_ACTIVE_PRESET 2 /* teal purple spin dim */
 
 static const uint8_t led_pos_default[RGBLIGHT_LED_COUNT][2] = {
