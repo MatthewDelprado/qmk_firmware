@@ -6,15 +6,15 @@
         "Effects: solid {color, brightness} · rainbow {brightness} · spin {colors: [a, b], brightness, period_ms}.",
         "Any layer can add pulse {color, brightness}: each keypress sends a ring of that colour out from the key.",
         "led_positions: where each of the 17 LEDs sits, in quarter-key units (x 0–60 left→right, y 0–20 top→bottom); [255, 255] = kept dark.",
-        "They run clockwise around the edge from Caps. LED 8 (right edge) is estimated; LED 16 is the Caps Lock LED, not fitted on hotswap.",
+        "They run clockwise around the edge from Caps. LED 9 (lower right edge) is estimated; LED 16 is the Caps Lock LED, not fitted on hotswap.",
         "Fn+Z re-runs calibration and types out a new led_positions line to paste here."
     ],
 
     "active": "teal purple spin",
 
     "led_positions": [
-        [4, 10], [2, 2], [14, 2], [22, 2], [30, 2], [38, 2], [46, 2], [57, 6], [56, 10],
-        [52, 14], [47, 18], [38, 18], [30, 18], [22, 18], [13, 18], [4, 14], [255, 255]
+        [3, 6], [2, 2], [14, 2], [22, 2], [30, 2], [38, 2], [46, 2], [58, 2], [56, 10],
+        [56, 14], [52, 18], [38, 18], [30, 18], [22, 18], [13, 18], [4, 14], [255, 255]
     ],
 
     "colors": {
