@@ -12,7 +12,7 @@
         "Fn+Z re-runs calibration and types out a new led_positions line to paste here."
     ],
 
-    "active": "teal purple spin dim",
+    "active": "teal purple spin cross",
 
     "led_positions": [
         [3, 6], [2, 2], [14, 2], [22, 2], [30, 2], [38, 2], [46, 2], [58, 2], [56, 10],
@@ -63,6 +63,15 @@
                 {"effect": "solid", "color": "teal", "brightness": 100, "pulse": {"color": "teal", "brightness": 10}},
                 {"effect": "solid", "color": "purple", "brightness": 100, "pulse": {"color": "purple", "brightness": 10}},
                 {"effect": "solid", "color": "teal", "brightness": 100, "pulse": {"color": "teal", "brightness": 10}}
+            ]
+        },
+
+        "teal purple spin cross": {
+            "layers": [
+                {"effect": "spin", "colors": ["teal", "purple"], "brightness": 100, "period_ms": 4000},
+                {"effect": "solid", "color": "teal", "brightness": 100, "pulse": {"color": "purple", "brightness": 100}},
+                {"effect": "solid", "color": "purple", "brightness": 100, "pulse": {"color": "teal", "brightness": 100}},
+                {"effect": "solid", "color": "teal", "brightness": 100, "pulse": {"color": "purple", "brightness": 100}}
             ]
         }
     }
