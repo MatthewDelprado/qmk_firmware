@@ -8,7 +8,7 @@
 #define UNDERGLOW_ACTIVE_PRESET 1 /* teal purple spin */
 
 static const uint8_t led_pos_default[RGBLIGHT_LED_COUNT][2] = {
-    {19, 14}, {13, 18}, {13, 18}, {13, 18}, {13, 18}, {13, 18}, {13, 18}, {47, 18}, {47, 18}, {47, 18}, {47, 18}, {47, 18}, {47, 18}, {47, 18}, {47, 18}, {4, 10}, {4, 10},
+    {4, 10}, {2, 2}, {14, 2}, {22, 2}, {30, 2}, {38, 2}, {46, 2}, {57, 6}, {56, 10}, {52, 14}, {47, 18}, {38, 18}, {30, 18}, {22, 18}, {13, 18}, {4, 14}, {255, 255},
 };
 
 /* {effect, colour a, colour b, spin period ms, pulse?, pulse colour} per layer */
