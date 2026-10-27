@@ -68,7 +68,10 @@ typedef struct
 #if defined(RGB_BACKLIGHT_M6_B) || defined(RGB_BACKLIGHT_M10_C)
 	HS custom_color[RGB_BACKLIGHT_CUSTOM_COLORS_COUNT];                 // 12 or 20 bytes
 #endif
-} backlight_config;                // = 31 bytes (M6-B = 43 bytes, M10-C 51 bytes)
+#if defined(RGB_BACKLIGHT_RIPPLE)
+	uint8_t ripple_min;                 // 1 byte, brightness floor for the ripple effect
+#endif
+} backlight_config;                // = 31 bytes (M6-B = 43 bytes, M10-C 51 bytes, +1 with RGB_BACKLIGHT_RIPPLE)
 
 void backlight_config_load(void);
 void backlight_config_save(void);
@@ -101,6 +104,11 @@ void backlight_effect_speed_decrease(void);
 
 void backlight_brightness_increase(void);
 void backlight_brightness_decrease(void);
+
+#if defined(RGB_BACKLIGHT_RIPPLE)
+// Raise (+1) or lower (-1) the ripple effect's brightness floor and save it.
+void backlight_ripple_min_step(int8_t direction);
+#endif
 
 void backlight_color_1_hue_increase(void);
 void backlight_color_1_hue_decrease(void);

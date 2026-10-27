@@ -3,6 +3,7 @@
 // Fn is TL_LOWR (VIA's "FN_MO13"): hold Fn + Space for the RGB layer.
 
 #include QMK_KEYBOARD_H
+#include "keyboards/wilba_tech/wt_rgb_backlight.h"
 
 enum layers {
     _BASE,
@@ -10,6 +11,24 @@ enum layers {
     _NAV,
     _RGB,
 };
+
+// Ripple brightness floor, on 9 / 0 of the RGB layer (next to the brightness max on - / =)
+enum custom_keycodes {
+    RIP_MIN_DEC = QK_USER,
+    RIP_MIN_INC,
+};
+
+bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    switch (keycode) {
+        case RIP_MIN_DEC:
+            if (record->event.pressed) backlight_ripple_min_step(-1);
+            return false;
+        case RIP_MIN_INC:
+            if (record->event.pressed) backlight_ripple_min_step(1);
+            return false;
+    }
+    return true;
+}
 
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     [_BASE] = LAYOUT_60_hhkb(
@@ -37,7 +56,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     ),
 
     [_RGB] = LAYOUT_60_hhkb(
-        _______, EF_DEC,  EF_INC,  H1_DEC,  H1_INC,  H2_DEC,  H2_INC,  _______, _______, _______, _______, BR_DEC,  BR_INC,  _______, _______,
+        _______, EF_DEC,  EF_INC,  H1_DEC,  H1_INC,  H2_DEC,  H2_INC,  _______, _______, RIP_MIN_DEC, RIP_MIN_INC, BR_DEC,  BR_INC,  _______, _______,
         _______, _______, _______, S1_DEC,  S1_INC,  S2_DEC,  S2_INC,  _______, _______, _______, _______, ES_DEC,  ES_INC,  _______,
         _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,
         _______,          _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,
