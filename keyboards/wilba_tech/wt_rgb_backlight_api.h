@@ -39,5 +39,6 @@ enum wt_rgb_backlight_config_value
 	id_layer_3_indicator_color = 0x14,
 	id_layer_3_indicator_row_col = 0x15,
 	id_alphas_mods = 0x16,
-	id_custom_color = 0x17
+	id_custom_color = 0x17,
+	id_ripple_min = 0x18    // only handled when RGB_BACKLIGHT_RIPPLE is defined
 };

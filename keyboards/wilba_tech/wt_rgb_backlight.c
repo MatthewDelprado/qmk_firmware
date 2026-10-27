@@ -107,7 +107,15 @@
 #endif
 #endif
 
+#if defined(RGB_BACKLIGHT_RIPPLE)
+// The ripple takes over effect 10 (VIA's "Radial Color 1") so it shows up in VIA's
+// built-in Effect dropdown, which only knows effects 0..10.
+#define RIPPLE_EFFECT 10
 #define BACKLIGHT_EFFECT_MAX 10
+_Static_assert(sizeof(backlight_config) <= VIA_EEPROM_CUSTOM_CONFIG_SIZE, "raise VIA_EEPROM_CUSTOM_CONFIG_SIZE for ripple_min");
+#else
+#define BACKLIGHT_EFFECT_MAX 10
+#endif
 
 backlight_config g_config = {
     .use_split_backspace = RGB_BACKLIGHT_USE_SPLIT_BACKSPACE,
@@ -133,6 +141,9 @@ backlight_config g_config = {
         RGB_BACKLIGHT_ALPHAS_MODS_ROW_2,
         RGB_BACKLIGHT_ALPHAS_MODS_ROW_3,
         RGB_BACKLIGHT_ALPHAS_MODS_ROW_4 },
+#if defined(RGB_BACKLIGHT_RIPPLE)
+    .ripple_min = RGB_BACKLIGHT_RIPPLE_MIN,
+#endif
 #if defined(RGB_BACKLIGHT_M6_B)
     .custom_color = { { 0, 255 }, { 43, 255 }, { 85, 255 }, { 128, 255 }, { 171, 255 }, { 213, 255 } }
 #elif defined(RGB_BACKLIGHT_M10_C)
@@ -972,8 +983,15 @@ void map_row_column_to_led( uint8_t row, uint8_t column, uint8_t *led )
     }
 }
 
+#if defined(RGB_BACKLIGHT_RIPPLE)
+static void backlight_ripple_task(void);
+#endif
+
 void backlight_update_pwm_buffers(void)
 {
+#if defined(RGB_BACKLIGHT_RIPPLE)
+    backlight_ripple_task();
+#endif
 #if defined(RGB_BACKLIGHT_M6_B)
     is31fl3218_update_pwm_buffers();
 #elif defined(RGB_BACKLIGHT_PORTICO75)
@@ -1558,6 +1576,242 @@ void backlight_effect_cycle_radial2(void)
     }
 }
 
+#if defined(RGB_BACKLIGHT_RIPPLE)
+// Reactive ripple (effect 10, replacing Radial Color 1). Every physical key press sends a ring of light out
+// from that key. The ring starts as color 1 and shifts to color 2 as it travels, and
+// its brightness falls from the global brightness (max) towards ripple_min while it
+// fades away. Idle LEDs rest at ripple_min in color 2 (0 = dark).
+//
+// Unlike the other effects this is not run from the 20 Hz timer interrupt. It runs
+// from backlight_update_pwm_buffers() (once per matrix scan) so it can react to the
+// raw matrix the instant a key goes down, even for mod-taps, which only reach
+// process_record after the tapping term, and so it can animate at ~30 Hz.
+#define RIPPLE_COUNT       8     // ripples alive at once (the oldest is recycled)
+#define RIPPLE_FRAME_MS    33
+#define RIPPLE_REACH       232   // radius at which a ripple has faded out completely
+#define RIPPLE_TRAIL_SHIFT 2     // 2 = light trails 64 units (4 keys) behind the front; 1 = longer, 3 = shorter
+
+typedef struct {
+    uint8_t  x;
+    uint8_t  y;
+    uint16_t t0;      // timer_read() when the key went down
+    bool     active;
+} ripple_t;
+
+static ripple_t g_ripples[RIPPLE_COUNT];
+
+// Front speed in LED-map units per 64 ms, for effect speeds 0..3 (~10, 16, 24, 34 keys/s)
+static const uint8_t g_ripple_speed[4] = { 10, 16, 24, 34 };
+
+static void ripple_spawn(uint8_t row, uint8_t col)
+{
+    uint8_t led;
+    map_row_column_to_led( row, col, &led );
+    if ( led >= BACKLIGHT_LED_COUNT )
+    {
+        return;
+    }
+    Point point;
+    map_led_to_point( led, &point );
+    if ( point.x == 255 && point.y == 255 )
+    {
+        return;
+    }
+
+    uint8_t slot = 0;
+    uint16_t oldest = 0;
+    for ( uint8_t i = 0; i < RIPPLE_COUNT; i++ )
+    {
+        if ( !g_ripples[i].active )
+        {
+            slot = i;
+            break;
+        }
+        uint16_t age = timer_elapsed( g_ripples[i].t0 );
+        if ( age >= oldest )
+        {
+            oldest = age;
+            slot = i;
+        }
+    }
+    g_ripples[slot].x = point.x;
+    g_ripples[slot].y = point.y;
+    g_ripples[slot].t0 = timer_read();
+    g_ripples[slot].active = true;
+}
+
+// Draws one frame. Returns true if any ripple was still alive in it.
+static bool ripple_render(void)
+{
+    uint8_t v_max = g_config.brightness;
+    uint8_t v_min = MIN( g_config.ripple_min, v_max );
+    uint8_t v_range = v_max - v_min;
+
+    // Hue travels the short way round from color 1 to color 2
+    int16_t dh = (int16_t)g_config.color_2.h - g_config.color_1.h;
+    if ( dh > 127 )
+    {
+        dh -= 256;
+    }
+    else if ( dh < -127 )
+    {
+        dh += 256;
+    }
+    int16_t ds = (int16_t)g_config.color_2.s - g_config.color_1.s;
+
+    uint8_t speed = g_ripple_speed[MIN( g_config.effect_speed, 3 )];
+    uint16_t radius[RIPPLE_COUNT];
+    uint8_t amplitude[RIPPLE_COUNT];
+    bool any = false;
+    for ( uint8_t k = 0; k < RIPPLE_COUNT; k++ )
+    {
+        if ( !g_ripples[k].active )
+        {
+            continue;
+        }
+        uint16_t r = ( (uint32_t)timer_elapsed( g_ripples[k].t0 ) * speed ) >> 6;
+        // Amplitude falls linearly with the distance travelled, reaching 0 at RIPPLE_REACH
+        uint16_t spent = r + ( r >> 3 );
+        if ( spent >= 255 )
+        {
+            g_ripples[k].active = false;
+            continue;
+        }
+        radius[k] = r;
+        amplitude[k] = 255 - spent;
+        any = true;
+    }
+
+    for ( uint8_t led = 0; led < BACKLIGHT_LED_COUNT; led++ )
+    {
+        Point p;
+        map_led_to_point( led, &p );
+        if ( p.x == 255 && p.y == 255 )
+        {
+            backlight_set_color( led, 0, 0, 0 );
+            continue;
+        }
+
+        uint8_t best = 0;
+        uint8_t best_f = 255;   // 255 = color 2, the resting color
+        for ( uint8_t k = 0; k < RIPPLE_COUNT; k++ )
+        {
+            if ( !g_ripples[k].active )
+            {
+                continue;
+            }
+            uint8_t dx = p.x > g_ripples[k].x ? p.x - g_ripples[k].x : g_ripples[k].x - p.x;
+            uint8_t dy = p.y > g_ripples[k].y ? p.y - g_ripples[k].y : g_ripples[k].y - p.y;
+            uint8_t hi = dx > dy ? dx : dy;
+            uint8_t lo = dx > dy ? dy : dx;
+            // Cheap distance, within ~5% of the real thing (no FPU, no sqrt)
+            uint16_t d = ( (uint16_t)hi * 61 + (uint16_t)lo * 26 ) >> 6;
+
+            // t > 0: the LED is that far behind the front; t < 0: the front is still that far away
+            int16_t t = (int16_t)radius[k] - (int16_t)d;
+            uint16_t fade;
+            if ( t >= 0 )
+            {
+                fade = (uint16_t)t << RIPPLE_TRAIL_SHIFT;
+            }
+            else
+            {
+                fade = (uint16_t)( -t ) << 4;   // a short soft leading edge
+            }
+            if ( fade >= 255 )
+            {
+                continue;
+            }
+            uint8_t value = ( (uint16_t)( 255 - fade ) * amplitude[k] ) >> 8;
+            if ( value > best )
+            {
+                best = value;
+                uint16_t f = d + ( d >> 3 );   // distance as 0..255 of RIPPLE_REACH
+                best_f = f > 255 ? 255 : f;
+            }
+        }
+
+        hsv_t hsv;
+        hsv.h = g_config.color_1.h + (int8_t)( ( (int32_t)dh * best_f ) >> 8 );
+        hsv.s = g_config.color_1.s + (int16_t)( ( (int32_t)ds * best_f ) >> 8 );
+        hsv.v = v_min + (uint8_t)( ( (uint16_t)v_range * ( (uint16_t)best + 1 ) ) >> 8 );
+        if ( hsv.v == 0 )
+        {
+            backlight_set_color( led, 0, 0, 0 );
+        }
+        else
+        {
+            rgb_t rgb = hsv_to_rgb( hsv );
+            backlight_set_color( led, rgb.r, rgb.g, rgb.b );
+        }
+    }
+    return any;
+}
+
+static void backlight_ripple_task(void)
+{
+    static matrix_row_t last_rows[MATRIX_ROWS];
+    static uint8_t last_sig[7];
+    static uint16_t last_frame;
+    static bool idle_drawn;
+
+    bool on = g_config.effect == RIPPLE_EFFECT && !( g_suspend_state && g_config.disable_when_usb_suspended );
+
+    // Watch the raw matrix for fresh key-downs (always, so a held key isn't a
+    // "new" press the moment the effect gets switched on)
+    bool pressed = false;
+    for ( uint8_t row = 0; row < MATRIX_ROWS; row++ )
+    {
+        matrix_row_t now = matrix_get_row( row );
+        matrix_row_t down = now & ~last_rows[row];
+        last_rows[row] = now;
+        if ( on && down )
+        {
+            for ( uint8_t col = 0; col < MATRIX_COLS; col++ )
+            {
+                if ( down & ( (matrix_row_t)1 << col ) )
+                {
+                    ripple_spawn( row, col );
+                    pressed = true;
+                }
+            }
+        }
+    }
+
+    if ( !on )
+    {
+        // Drop in-flight ripples so none reappear later with a stale start time
+        for ( uint8_t k = 0; k < RIPPLE_COUNT; k++ )
+        {
+            g_ripples[k].active = false;
+        }
+        idle_drawn = false;
+        return;
+    }
+
+    // Redraw the resting frame when any setting that shapes it changes
+    uint8_t sig[7] = { g_config.brightness, g_config.color_1.h, g_config.color_1.s,
+                       g_config.color_2.h, g_config.color_2.s, g_config.ripple_min, g_config.effect_speed };
+    if ( memcmp( sig, last_sig, sizeof( sig ) ) != 0 )
+    {
+        memcpy( last_sig, sig, sizeof( sig ) );
+        idle_drawn = false;
+    }
+
+    bool any = false;
+    for ( uint8_t k = 0; k < RIPPLE_COUNT; k++ )
+    {
+        any = any || g_ripples[k].active;
+    }
+
+    if ( pressed || ( any ? timer_elapsed( last_frame ) >= RIPPLE_FRAME_MS : !idle_drawn ) )
+    {
+        last_frame = timer_read();
+        idle_drawn = !ripple_render();
+    }
+}
+#endif // RGB_BACKLIGHT_RIPPLE
+
 #if defined(RGB_BACKLIGHT_M6_B) || defined(RGB_BACKLIGHT_M10_C)
 void backlight_effect_custom_colors(void)
 {
@@ -1744,7 +1998,11 @@ static void gpt_backlight_timer_task(GPTDriver *gptp)
             backlight_effect_cycle_radial1();
             break;
         case 10:
+#if defined(RGB_BACKLIGHT_RIPPLE)
+            // ripple: drawn from the main loop, see backlight_ripple_task()
+#else
             backlight_effect_cycle_radial2();
+#endif
             break;
         default:
             backlight_effect_all_off();
@@ -1880,6 +2138,13 @@ void backlight_config_set_value( uint8_t *data )
             g_config.effect_speed = *value_data;
             break;
         }
+#if defined(RGB_BACKLIGHT_RIPPLE)
+        case id_ripple_min:
+        {
+            g_config.ripple_min = *value_data;
+            break;
+        }
+#endif
         case id_color_1:
         {
             _set_color( &(g_config.color_1), value_data );
@@ -2016,6 +2281,13 @@ void backlight_config_get_value( uint8_t *data )
             *value_data = g_config.effect_speed;
             break;
         }
+#if defined(RGB_BACKLIGHT_RIPPLE)
+        case id_ripple_min:
+        {
+            *value_data = g_config.ripple_min;
+            break;
+        }
+#endif
         case id_color_1:
         {
             _get_color( &(g_config.color_1), value_data );
@@ -2556,6 +2828,21 @@ void backlight_brightness_decrease(void)
     g_config.brightness = decrement( g_config.brightness, 8, 0, 255 );
     backlight_config_save();
 }
+
+#if defined(RGB_BACKLIGHT_RIPPLE)
+void backlight_ripple_min_step(int8_t direction)
+{
+    if ( direction > 0 )
+    {
+        g_config.ripple_min = increment( g_config.ripple_min, 8, 0, 255 );
+    }
+    else
+    {
+        g_config.ripple_min = decrement( g_config.ripple_min, 8, 0, 255 );
+    }
+    backlight_config_save();
+}
+#endif
 
 void backlight_color_1_hue_increase(void)
 {

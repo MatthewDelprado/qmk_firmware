@@ -31,5 +31,9 @@ enum wt_rgb_backlight_keycodes {
     H2_INC,             // color 2 hue increase
     H2_DEC,             // color 2 hue decrease
     S2_INC,             // color 2 saturation increase
-    S2_DEC              // color 2 saturation decrease
+    S2_DEC,             // color 2 saturation decrease
+#if defined(RGB_BACKLIGHT_RIPPLE)
+    RIP_MIN_DEC,        // ripple brightness floor decrease
+    RIP_MIN_INC,        // ripple brightness floor increase
+#endif
 };

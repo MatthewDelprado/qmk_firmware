@@ -1,0 +1,319 @@
+{
+  "name": "RAMA WORKS KARA",
+  "vendorId": "0x5241",
+  "productId": "0x4B52",
+  "matrix": {
+    "rows": 5,
+    "cols": 14
+  },
+  "customKeycodes": [
+    {
+      "name": "BR+",
+      "title": "Brightness up",
+      "shortName": "BR+"
+    },
+    {
+      "name": "BR-",
+      "title": "Brightness down",
+      "shortName": "BR-"
+    },
+    {
+      "name": "EF+",
+      "title": "Effect next",
+      "shortName": "EF+"
+    },
+    {
+      "name": "EF-",
+      "title": "Effect previous",
+      "shortName": "EF-"
+    },
+    {
+      "name": "ES+",
+      "title": "Effect speed up",
+      "shortName": "ES+"
+    },
+    {
+      "name": "ES-",
+      "title": "Effect speed down",
+      "shortName": "ES-"
+    },
+    {
+      "name": "H1+",
+      "title": "Color 1 hue up",
+      "shortName": "H1+"
+    },
+    {
+      "name": "H1-",
+      "title": "Color 1 hue down",
+      "shortName": "H1-"
+    },
+    {
+      "name": "S1+",
+      "title": "Color 1 saturation up",
+      "shortName": "S1+"
+    },
+    {
+      "name": "S1-",
+      "title": "Color 1 saturation down",
+      "shortName": "S1-"
+    },
+    {
+      "name": "H2+",
+      "title": "Color 2 hue up",
+      "shortName": "H2+"
+    },
+    {
+      "name": "H2-",
+      "title": "Color 2 hue down",
+      "shortName": "H2-"
+    },
+    {
+      "name": "S2+",
+      "title": "Color 2 saturation up",
+      "shortName": "S2+"
+    },
+    {
+      "name": "S2-",
+      "title": "Color 2 saturation down",
+      "shortName": "S2-"
+    },
+    {
+      "name": "RipMin-",
+      "title": "Ripple min brightness down",
+      "shortName": "RipMin-"
+    },
+    {
+      "name": "RipMin+",
+      "title": "Ripple min brightness up",
+      "shortName": "RipMin+"
+    }
+  ],
+  "menus": [
+    {
+      "label": "Lighting",
+      "content": [
+        {
+          "label": "Kara lighting",
+          "content": [
+            {
+              "label": "Brightness (max)",
+              "type": "range",
+              "content": [
+                "id_wt_brightness",
+                0,
+                9
+              ],
+              "options": [
+                0,
+                255
+              ]
+            },
+            {
+              "label": "Effect",
+              "type": "dropdown",
+              "content": [
+                "id_wt_effect",
+                0,
+                10
+              ],
+              "options": [
+                [
+                  "All Off",
+                  0
+                ],
+                [
+                  "Solid Color 1",
+                  1
+                ],
+                [
+                  "Alphas / Mods",
+                  2
+                ],
+                [
+                  "Gradient Up Down",
+                  3
+                ],
+                [
+                  "Raindrops",
+                  4
+                ],
+                [
+                  "Cycle All",
+                  5
+                ],
+                [
+                  "Cycle Left Right",
+                  6
+                ],
+                [
+                  "Cycle Up Down",
+                  7
+                ],
+                [
+                  "Jellybean Raindrops",
+                  8
+                ],
+                [
+                  "Radial All Hues",
+                  9
+                ],
+                [
+                  "Ripple (reactive)",
+                  10
+                ]
+              ]
+            },
+            {
+              "label": "Effect speed",
+              "type": "range",
+              "content": [
+                "id_wt_effect_speed",
+                0,
+                11
+              ],
+              "options": [
+                0,
+                3
+              ]
+            },
+            {
+              "label": "Color 1 (start)",
+              "type": "color",
+              "content": [
+                "id_wt_color_1",
+                0,
+                12
+              ]
+            },
+            {
+              "label": "Color 2 (end)",
+              "type": "color",
+              "content": [
+                "id_wt_color_2",
+                0,
+                13
+              ]
+            },
+            {
+              "label": "Ripple brightness (min)",
+              "type": "range",
+              "content": [
+                "id_wt_ripple_min",
+                0,
+                24
+              ],
+              "options": [
+                0,
+                255
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "layouts": {
+    "keymap": [
+      [
+        "0,0",
+        "0,1",
+        "0,2",
+        "0,3",
+        "0,4",
+        "0,5",
+        "0,6",
+        "0,7",
+        "0,8",
+        "0,9",
+        "0,10",
+        "0,11",
+        "0,12",
+        "0,13",
+        "2,13"
+      ],
+      [
+        {
+          "w": 1.5
+        },
+        "1,0",
+        "1,1",
+        "1,2",
+        "1,3",
+        "1,4",
+        "1,5",
+        "1,6",
+        "1,7",
+        "1,8",
+        "1,9",
+        "1,10",
+        "1,11",
+        "1,12",
+        {
+          "w": 1.5
+        },
+        "1,13"
+      ],
+      [
+        {
+          "w": 1.75
+        },
+        "2,0",
+        "2,1",
+        "2,2",
+        "2,3",
+        "2,4",
+        "2,5",
+        "2,6",
+        "2,7",
+        "2,8",
+        "2,9",
+        "2,10",
+        "2,11",
+        {
+          "w": 2.25
+        },
+        "2,12"
+      ],
+      [
+        {
+          "w": 2.25
+        },
+        "3,0",
+        "3,2",
+        "3,3",
+        "3,4",
+        "3,5",
+        "3,6",
+        "3,7",
+        "3,8",
+        "3,9",
+        "3,10",
+        "3,11",
+        {
+          "w": 1.75
+        },
+        "3,12",
+        "3,13"
+      ],
+      [
+        {
+          "x": 1.5
+        },
+        "4,1",
+        {
+          "w": 1.5
+        },
+        "4,2",
+        {
+          "w": 7
+        },
+        "4,7",
+        {
+          "w": 1.5
+        },
+        "4,11",
+        "4,12"
+      ]
+    ]
+  }
+}
