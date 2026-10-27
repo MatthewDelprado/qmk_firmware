@@ -108,8 +108,10 @@
 #endif
 
 #if defined(RGB_BACKLIGHT_RIPPLE)
-#define RIPPLE_EFFECT 11
-#define BACKLIGHT_EFFECT_MAX 11
+// The ripple takes over effect 10 (VIA's "Radial Color 1") so it shows up in VIA's
+// built-in Effect dropdown, which only knows effects 0..10.
+#define RIPPLE_EFFECT 10
+#define BACKLIGHT_EFFECT_MAX 10
 _Static_assert(sizeof(backlight_config) <= VIA_EEPROM_CUSTOM_CONFIG_SIZE, "raise VIA_EEPROM_CUSTOM_CONFIG_SIZE for ripple_min");
 #else
 #define BACKLIGHT_EFFECT_MAX 10
@@ -1575,7 +1577,7 @@ void backlight_effect_cycle_radial2(void)
 }
 
 #if defined(RGB_BACKLIGHT_RIPPLE)
-// Reactive ripple (effect 11). Every physical key press sends a ring of light out
+// Reactive ripple (effect 10, replacing Radial Color 1). Every physical key press sends a ring of light out
 // from that key. The ring starts as color 1 and shifts to color 2 as it travels, and
 // its brightness falls from the global brightness (max) towards ripple_min while it
 // fades away. Idle LEDs rest at ripple_min in color 2 (0 = dark).
@@ -1996,13 +1998,12 @@ static void gpt_backlight_timer_task(GPTDriver *gptp)
             backlight_effect_cycle_radial1();
             break;
         case 10:
-            backlight_effect_cycle_radial2();
-            break;
 #if defined(RGB_BACKLIGHT_RIPPLE)
-        case RIPPLE_EFFECT:
-            // drawn from the main loop, see backlight_ripple_task()
-            break;
+            // ripple: drawn from the main loop, see backlight_ripple_task()
+#else
+            backlight_effect_cycle_radial2();
 #endif
+            break;
         default:
             backlight_effect_all_off();
             break;
@@ -2137,6 +2138,13 @@ void backlight_config_set_value( uint8_t *data )
             g_config.effect_speed = *value_data;
             break;
         }
+#if defined(RGB_BACKLIGHT_RIPPLE)
+        case id_ripple_min:
+        {
+            g_config.ripple_min = *value_data;
+            break;
+        }
+#endif
         case id_color_1:
         {
             _set_color( &(g_config.color_1), value_data );
@@ -2273,6 +2281,13 @@ void backlight_config_get_value( uint8_t *data )
             *value_data = g_config.effect_speed;
             break;
         }
+#if defined(RGB_BACKLIGHT_RIPPLE)
+        case id_ripple_min:
+        {
+            *value_data = g_config.ripple_min;
+            break;
+        }
+#endif
         case id_color_1:
         {
             _get_color( &(g_config.color_1), value_data );

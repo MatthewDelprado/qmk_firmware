@@ -12,12 +12,9 @@ enum layers {
     _RGB,
 };
 
-// Ripple brightness floor, on 9 / 0 of the RGB layer (next to the brightness max on - / =)
-enum custom_keycodes {
-    RIP_MIN_DEC = QK_USER,
-    RIP_MIN_INC,
-};
-
+// Ripple brightness floor, on 9 / 0 of the RGB layer (next to the brightness max on - / =).
+// RIP_MIN_DEC / RIP_MIN_INC come from wt_rgb_backlight_keycodes.h so VIA's custom keycode
+// list lines up with the other lighting keys.
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     switch (keycode) {
         case RIP_MIN_DEC:
